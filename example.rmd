@@ -1,0 +1,98 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Chris Norris"
+date: "12 May 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+##Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+The goal of this project, is to predict the manner in which they did the exercise using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+###Data 
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+###Initial Setup
+
+```{R}
+# I use Pacman now for easy package loading
+install.packages("pacman", repos = "http://cran.us.r-project.org"); library(pacman)
+p_load(caret, rpart, rpart.plot, randomForest, e1071, MASS)
+
+
+# Set the seed for reproducability
+set.seed(12321)
+```
+
+###Data Load
+
+```{R}
+
+training <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+
+training <- training[,!sapply(training,function(x) any(is.na(x)))]
+testing <- testing[,!sapply(testing,function(x) any(is.na(x)))]
+```
+
+###Data Exploration
+
+I've explored the data offline but here is 1 row for context for the training data set
+
+```{R}
+head(training, 1)
+```
+
+###Data Preparation
+
+Remove columns we do not need for the exercise. Names, for example, are not going to be useful.
+
+```{R}
+training <-training[,-c(1:6)]
+testing <-testing[,-c(1:6)]
+
+indices <- createDataPartition(y=training$classe, p=0.8, list=FALSE)
+Train <- training[indices, ] 
+Validation <- training[-indices, ]
+
+model_forests <- randomForest(classe ~ ., data = Train)
+model_svm <- svm(classe ~. , data=Train)
+model_lda <- train(classe ~. , data=Train, method="lda")
+
+prediction_forest <- predict(model_forests, Validation, type = "class")
+confusionMatrix(prediction_forest, Validation$classe)
+
+prediction_forest_train <- predict(model_forests, Train, type = "class")
+confusionMatrix(prediction_forest_train, Train$classe)
+
+prediction_forest_test <- predict(model_forests, testing, type = "class")
+prediction_forest_test
+```
+
+###Output
+####Declare function for prediction means
+
+```{R}
+meanVal <- function(x) {mean(predict(x, Validation) == Validation$classe)}
+```
+
+Compare the 3 models
+
+```{R}
+meanVal(model_forests)
+meanVal(model_svm)
+meanVal(model_lda)
+```
