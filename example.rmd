@@ -1,7 +1,7 @@
 ---
 title: "Practical Machine Learning Course Project"
 author: "Chris Norris"
-date: "12 May 2017"
+date: "04 June 2017"
 output:
   html_document: default
   pdf_document: default
@@ -40,9 +40,11 @@ set.seed(12321)
 ###Data Load
 
 ```{R}
+URLTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+URLTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 
-training <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
-testing <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+training <- read.csv(URLTrain, na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(URLTest, na.strings=c("NA","#DIV/0!",""))
 
 training <- training[,!sapply(training,function(x) any(is.na(x)))]
 testing <- testing[,!sapply(testing,function(x) any(is.na(x)))]
@@ -58,41 +60,57 @@ head(training, 1)
 
 ###Data Preparation
 
-Remove columns we do not need for the exercise. Names, for example, are not going to be useful.
+Remove columns we do not need for the exercise. Non-sensor data like Names and dates, for example, are not going to be useful here.
 
 ```{R}
-training <-training[,-c(1:6)]
-testing <-testing[,-c(1:6)]
-
-indices <- createDataPartition(y=training$classe, p=0.8, list=FALSE)
-Train <- training[indices, ] 
-Validation <- training[-indices, ]
-
-model_forests <- randomForest(classe ~ ., data = Train)
-model_svm <- svm(classe ~. , data=Train)
-model_lda <- train(classe ~. , data=Train, method="lda")
-
-prediction_forest <- predict(model_forests, Validation, type = "class")
-confusionMatrix(prediction_forest, Validation$classe)
-
-prediction_forest_train <- predict(model_forests, Train, type = "class")
-confusionMatrix(prediction_forest_train, Train$classe)
-
-prediction_forest_test <- predict(model_forests, testing, type = "class")
-prediction_forest_test
+training <-training[,-c(1:7)]
+testing <-testing[,-c(1:7)]
 ```
 
-###Output
-####Declare function for prediction means
+Now we're going to split the training data set to create the validation data:
 
 ```{R}
-meanVal <- function(x) {mean(predict(x, Validation) == Validation$classe)}
+trainingDataPartition <- createDataPartition(y=training$classe, p=0.8, list=FALSE)
+trainData <- training[trainingDataPartition, ] 
+validationData <- training[-trainingDataPartition, ]
 ```
 
-Compare the 3 models
+So let's create the model and review output. 
+
+My choice is Random Forest. Well pit 'classe' against the other variables:
 
 ```{R}
-meanVal(model_forests)
-meanVal(model_svm)
-meanVal(model_lda)
+myModel.forests <- randomForest(classe ~ ., data = trainData, ntree=50)
+```
+
+50 trees was determined to be the optimal value after examination of the plot of the OOB error rate.
+The graph flattens considerably after 25 trees and has a low rate of change after 40. I rounded it off to 50. The current error rate then is:
+
+```{R}
+mean(myModel.forests$err.rate)
+```
+
+Next, lets predict on the testing data and produce a confusion matrix
+
+```{R}
+predictionRF <- predict(myModel.forests, trainData, type = "class")
+confRF <- confusionMatrix(predictionRF, trainData$classe)
+print(confRF)
+```
+
+Excellent result. Accuracy of 1 and 95% CI > 0.99.
+
+All looks nice and accurate. So now let's test the validation data:
+
+```{R}
+predictionRF.v <- predict(myModel.forests, validationData, type = "class")
+confRF.v <- confusionMatrix(predictionRF.v, validationData$classe)
+print(confRF.v)
+```
+
+Finally we can run predictions on the test data and arrive at our quiz answer:
+
+```{R}
+finalTest <- predict(myModel.forests, testing)
+finalTest
 ```
